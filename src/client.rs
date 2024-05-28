@@ -26,7 +26,12 @@ impl MyfansClient {
         })
     }
 
-    pub async fn get<T: DeserializeOwned>(&self, path: &str, query: &impl Serialize) -> Result<T> {
+    pub async fn get<T: DeserializeOwned>(
+        &self,
+        path: impl AsRef<str>,
+        query: &impl Serialize,
+    ) -> Result<T> {
+        let path = path.as_ref();
         self.inner
             .get(format!("{BASE_URL}{path}"))
             .headers(self.headers.clone())
@@ -40,7 +45,7 @@ impl MyfansClient {
             .map_err(From::from)
     }
 
-    pub async fn post_ids_by_plan_id(
+    pub async fn get_post_ids_by_plan_id(
         &self,
         plan_id: &str,
         sort_key: &str,
@@ -73,7 +78,7 @@ impl MyfansClient {
 
         let PostResponse { data, pagination } = self
             .get(
-                &format!("/plans/{plan_id}/posts"),
+                format!("/plans/{plan_id}/posts"),
                 &Query {
                     sort_key: sort_key.into(),
                     per_page,
@@ -84,5 +89,27 @@ impl MyfansClient {
 
         let ids = data.into_iter().map(|post| post.id).collect::<Vec<_>>();
         Ok((ids, pagination.next))
+    }
+
+    pub async fn get_post_video_url(&self, post_id: &str) -> Result<Option<String>> {
+        #[derive(Deserialize, Debug)]
+        pub struct VideoResponse {
+            pub main: Option<Vec<Video>>,
+        }
+
+        #[derive(Deserialize, Debug)]
+        pub struct Video {
+            // .m3u8
+            pub url: String,
+            pub width: usize,
+        }
+
+        let VideoResponse { main } = self.get(format!("/posts/{post_id}/videos"), &()).await?;
+
+        let mut main = main.unwrap_or_default();
+        main.sort_by(|a, b| a.width.cmp(&b.width));
+        main.reverse();
+
+        Ok(main.into_iter().next().map(|video| video.url))
     }
 }
