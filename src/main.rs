@@ -1,8 +1,11 @@
 mod client;
 
+use std::collections::HashMap;
+
 use anyhow::{Context as _, Result};
 use clap::Parser;
 use const_format::formatcp;
+use futures::future::try_join_all;
 
 use crate::client::MyfansClient;
 
@@ -24,14 +27,20 @@ async fn main() {
 
     let post_ids = get_all_post_ids(&client, &cli.plan_id).await.unwrap();
 
-    println!("ids = {}", post_ids.len());
-
-    for post_id in &post_ids {
-        let url = client
-            .get_post_video_url(post_id)
+    let video_urls = try_join_all(post_ids.into_iter().map(|post_id| async {
+        client
+            .get_post_video_url(&post_id)
             .await
-            .expect("Failed to get post video url");
-        println!("post_id({post_id}) - {}", url.unwrap_or_default());
+            .map(|url| url.map(|url| (post_id, url)))
+    }))
+    .await
+    .expect("Failed to get video url.")
+    .into_iter()
+    .flatten()
+    .collect::<HashMap<_, _>>();
+
+    for (post_id, video_url) in video_urls {
+        println!("- {post_id} - {video_url}");
     }
 }
 
