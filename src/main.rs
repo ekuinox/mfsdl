@@ -1,10 +1,12 @@
 mod client;
 
 use clap::Parser;
+use const_format::formatcp;
 
 use crate::client::MyfansClient;
 
 #[derive(Parser, Debug)]
+#[clap(version = formatcp!("v{} ({})", env!("CARGO_PKG_VERSION"), env!("VERGEN_GIT_SHA")))]
 pub struct Cli {
     #[clap(short, long)]
     plan_id: String,
