@@ -2,6 +2,10 @@
 name = "myfans-downloader"
 version = "0.1.0"
 edition = "2021"
+license = "WTFPL"
+authors = ["ekuinox <depkey@me.com>"]
+repository = "https://github.com/ekuinox/myfans-downloader"
+readme = "README.md"
 
 [dependencies]
 anyhow = "1.0.86"
