@@ -105,7 +105,7 @@ async fn get_all_post_ids(client: &MyfansClient, plan_id: &str) -> Result<Vec<St
 
 /// `ffmpeg` を呼び出して `.m3u8` を `.mp4` としてダウンロードする
 async fn download_m3u8_to_mp4(post_id: &str, video_url: &str, output: &str) -> Result<()> {
-    tracing::info!(post_id, video_url, "Start has started.");
+    tracing::info!(post_id, video_url, "Download has started.");
     let output = Command::new("ffmpeg")
         .args([
             "-i",
@@ -129,7 +129,7 @@ async fn download_m3u8_to_mp4(post_id: &str, video_url: &str, output: &str) -> R
 
 /// `.mp4` をそのままダウンロードする
 async fn download_mp4(post_id: &str, video_url: &str, output: &str) -> Result<()> {
-    tracing::info!(post_id, video_url, "Start has started.");
+    tracing::info!(post_id, video_url, "Download has started.");
 
     let _ = (post_id, video_url, output);
     let mut reader = reqwest::get(video_url)
