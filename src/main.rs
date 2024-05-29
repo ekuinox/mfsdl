@@ -1,11 +1,12 @@
 mod client;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use anyhow::{Context as _, Result};
+use anyhow::{anyhow, Context as _, Result};
 use clap::Parser;
 use const_format::formatcp;
 use futures::future::try_join_all;
+use tokio::{process::Command, sync::Semaphore};
 
 use crate::client::MyfansClient;
 
@@ -15,6 +16,9 @@ pub struct Cli {
     #[clap(short, long)]
     plan_id: String,
 
+    #[clap(short, long)]
+    output: String,
+
     #[clap(short, long, env = "MYFANS_TOKEN")]
     token: String,
 }
@@ -22,6 +26,12 @@ pub struct Cli {
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
+
+    tracing_subscriber::fmt::init();
+
+    tokio::fs::create_dir_all(&cli.output)
+        .await
+        .expect("Failed to create output directory.");
 
     let client = MyfansClient::new(cli.token).expect("Failed to build client.");
 
@@ -39,9 +49,28 @@ async fn main() {
     .flatten()
     .collect::<HashMap<_, _>>();
 
-    for (post_id, video_url) in video_urls {
-        println!("- {post_id} - {video_url}");
-    }
+    let semaphore = Arc::new(Semaphore::new(5));
+
+    let output = Arc::new(cli.output);
+
+    let _ = try_join_all(video_urls.into_iter().map(|(post_id, video_url)| {
+        let semaphore = Arc::clone(&semaphore);
+        let output = Arc::clone(&output);
+        tokio::spawn(async move {
+            let _sm = semaphore.acquire().await?;
+            if output.ends_with(".m3u8") {
+                download_m3u8(&post_id, &video_url, &output).await
+            } else if output.ends_with(".mp4") {
+                // TODO
+                Ok(())
+            } else {
+                // Not supported.
+                Ok(())
+            }
+        })
+    }))
+    .await
+    .expect("Failed to start convert.");
 }
 
 async fn get_all_post_ids(client: &MyfansClient, plan_id: &str) -> Result<Vec<String>> {
@@ -60,4 +89,26 @@ async fn get_all_post_ids(client: &MyfansClient, plan_id: &str) -> Result<Vec<St
     }
 
     Ok(all_ids)
+}
+
+async fn download_m3u8(post_id: &str, video_url: &str, output: &str) -> Result<()> {
+    tracing::info!("starting {post_id} ({video_url}).");
+    let output = Command::new("ffmpeg")
+        .args([
+            "-i",
+            format!(r#"{video_url}"#).as_str(),
+            "-c",
+            "copy",
+            "-bsf:a",
+            "aac_adtstoasc",
+            format!(r#"{output}/{post_id}.mp4"#).as_str(),
+        ])
+        .output()
+        .await?;
+    tracing::info!("finished {post_id}");
+    if !output.status.success() {
+        Err(anyhow!("{}", String::from_utf8_lossy(&output.stderr)))
+    } else {
+        Ok(()) as Result<()>
+    }
 }
