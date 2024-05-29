@@ -131,7 +131,6 @@ async fn download_m3u8_to_mp4(post_id: &str, video_url: &str, output: &str) -> R
 async fn download_mp4(post_id: &str, video_url: &str, output: &str) -> Result<()> {
     tracing::info!(post_id, video_url, "Download has started.");
 
-    let _ = (post_id, video_url, output);
     let mut reader = reqwest::get(video_url)
         .await
         .context("Failed to request.")?
