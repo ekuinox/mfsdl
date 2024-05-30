@@ -1,11 +1,11 @@
-# myfans-downloader
+# mfsdl
 
-A Tools for download videos from [myfans](https://myfans.jp).
+A Tools for download videos from myfans.
 
 ## Installation
 
 ```console
-cargo install --git https://github.com/ekuinox/myfans-downloader
+cargo install --git https://github.com/ekuinox/mfsdl
 ```
 
 **And it requires `ffmpeg` command in `$PATH` env var.**
@@ -25,7 +25,7 @@ Open myfans plan and get `plan_id` from url.
 And start download with below command.
 
 ```console
-myfans-downloader --plan-id <COPIED_PLAN_ID> --ouput <OUTPUT_DIRECTORY>
+mfsdl --plan-id <COPIED_PLAN_ID> --ouput <OUTPUT_DIRECTORY>
 ```
 
 ---
