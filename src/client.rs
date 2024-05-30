@@ -1,6 +1,7 @@
 use anyhow::{Context as _, Result};
 use reqwest::header::{self, HeaderMap, HeaderValue};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use structstruck::strike;
 
 const BASE_URL: &str = "https://api.myfans.jp/api/v2";
 const UA: &str = "user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36";
@@ -52,28 +53,23 @@ impl MyfansClient {
         per_page: usize,
         page: usize,
     ) -> Result<(Vec<String>, Option<usize>)> {
-        #[derive(Deserialize, Debug)]
-        pub struct PostResponse {
-            pub data: Vec<Post>,
-            pub pagination: Pagination,
-        }
-
-        #[derive(Deserialize, Debug)]
-        pub struct Post {
-            pub id: String,
-        }
-
-        #[derive(Deserialize, Debug)]
-        pub struct Pagination {
-            pub current: usize,
-            pub next: Option<usize>,
+        strike! {
+            #[strikethrough[derive(Deserialize, Debug)]]
+            struct PostResponse {
+                data: Vec<struct Post {
+                   id: String,
+                }>,
+                pagination: struct Pagination {
+                    next: Option<usize>,
+                },
+            }
         }
 
         #[derive(Serialize, Debug)]
-        pub struct Query {
-            pub sort_key: String,
-            pub per_page: usize,
-            pub page: usize,
+        struct Query {
+            sort_key: String,
+            per_page: usize,
+            page: usize,
         }
 
         let PostResponse { data, pagination } = self
@@ -92,16 +88,15 @@ impl MyfansClient {
     }
 
     pub async fn get_post_video_url(&self, post_id: &str) -> Result<Option<String>> {
-        #[derive(Deserialize, Debug)]
-        pub struct VideoResponse {
-            pub main: Option<Vec<Video>>,
-        }
-
-        #[derive(Deserialize, Debug)]
-        pub struct Video {
-            // .m3u8
-            pub url: String,
-            pub width: usize,
+        strike! {
+            #[strikethrough[derive(Deserialize, Debug)]]
+            struct VideoResponse {
+                main: Option<Vec<struct Video {
+                    // .m3u8
+                    url: String,
+                    width: usize,
+                }>>,
+            }
         }
 
         let VideoResponse { main } = self.get(format!("/posts/{post_id}/videos"), &()).await?;
