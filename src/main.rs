@@ -24,6 +24,7 @@ pub struct Cli {
     #[clap(short, long, default_value_t = 4)]
     jobs: usize,
 
+    /// from cookie `_mfans_token`
     #[clap(short, long, env = "MYFANS_TOKEN")]
     token: String,
 }

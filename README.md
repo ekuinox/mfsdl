@@ -12,7 +12,7 @@ cargo install --git https://github.com/ekuinox/mfsdl
 
 ## Usage
 
-Get token from browser network inspector.
+Get token from cookie `_mfans_token`
 
 ![Get token](./token.png)
 
