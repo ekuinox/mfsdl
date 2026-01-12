@@ -38,10 +38,6 @@ async fn main() {
 
     let cli = Cli::parse();
 
-    tokio::fs::create_dir_all(&cli.output)
-        .await
-        .expect("Failed to create output directory.");
-
     let client = MyfansClient::new(cli.token).expect("Failed to build client.");
 
     // すべての記事 ID を取得してくる
@@ -62,6 +58,10 @@ async fn main() {
     .collect::<HashMap<_, _>>();
     tracing::info!("Fetched {} video urls.", video_urls.len());
 
+    // ダウンロード先のディレクトリを先に作っておく
+    tokio::fs::create_dir_all(&cli.output)
+        .await
+        .expect("Failed to create output directory.");
     // 動画のダウンロードを `cli.jobs` 数並行して行う
     let semaphore = Arc::new(Semaphore::new(cli.jobs));
     let output = Arc::new(cli.output);
