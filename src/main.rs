@@ -1,8 +1,9 @@
 mod client;
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{ensure, Context as _, Result};
+use camino::{Utf8Path, Utf8PathBuf};
 use clap::Parser;
 use const_format::formatcp;
 use futures::{future::try_join_all, StreamExt as _};
@@ -22,7 +23,7 @@ pub struct Cli {
     plan_id: String,
 
     #[clap(short, long)]
-    output: String,
+    output: Utf8PathBuf,
 
     #[clap(short, long, default_value_t = 4)]
     jobs: usize,
@@ -71,9 +72,9 @@ async fn main() {
             let _sm = semaphore.acquire().await?;
 
             if video_url.ends_with(".m3u8") {
-                download_m3u8_to_mp4(&post_id, &video_url, &output).await
+                download_m3u8_to_mp4(&post_id, &video_url, output.as_ref()).await
             } else if video_url.ends_with(".mp4") {
-                download_mp4(&post_id, &video_url, &output).await
+                download_mp4(&post_id, &video_url, output.as_ref()).await
             } else {
                 tracing::info!(post_id, video_url, "Skipped.");
                 Ok(())
@@ -104,8 +105,18 @@ async fn get_all_post_ids(client: &MyfansClient, plan_id: &str) -> Result<Vec<St
 }
 
 /// `ffmpeg` を呼び出して `.m3u8` を `.mp4` としてダウンロードする
-async fn download_m3u8_to_mp4(post_id: &str, video_url: &str, output: &str) -> Result<()> {
+async fn download_m3u8_to_mp4(
+    post_id: &str,
+    video_url: &str,
+    output: impl AsRef<Utf8Path>,
+) -> Result<()> {
     tracing::info!(post_id, video_url, "Download has started.");
+    let output = output.as_ref().join(post_id).with_extension("mp4");
+    if output.exists() {
+        tracing::info!(post_id, video_url, "exists.");
+        return Ok(());
+    }
+
     let output = Command::new("ffmpeg")
         .args([
             "-i",
@@ -114,7 +125,7 @@ async fn download_m3u8_to_mp4(post_id: &str, video_url: &str, output: &str) -> R
             "copy",
             "-bsf:a",
             "aac_adtstoasc",
-            format!(r#"{output}/{post_id}.mp4"#).as_str(),
+            output.as_str(),
         ])
         .output()
         .await?;
@@ -128,15 +139,21 @@ async fn download_m3u8_to_mp4(post_id: &str, video_url: &str, output: &str) -> R
 }
 
 /// `.mp4` をそのままダウンロードする
-async fn download_mp4(post_id: &str, video_url: &str, output: &str) -> Result<()> {
+async fn download_mp4(post_id: &str, video_url: &str, output: impl AsRef<Utf8Path>) -> Result<()> {
     tracing::info!(post_id, video_url, "Download has started.");
+
+    let output = output.as_ref().join(post_id).with_extension("mp4");
+    if output.exists() {
+        tracing::info!(post_id, video_url, "exists.");
+        return Ok(());
+    }
 
     let mut reader = reqwest::get(video_url)
         .await
         .context("Failed to request.")?
         .error_for_status()?
         .bytes_stream();
-    let file = File::create(PathBuf::from(output).join(post_id).with_extension("mp4"))
+    let file = File::create(output)
         .await
         .context("Failed to create output file.")?;
     let mut writer = BufWriter::new(file);

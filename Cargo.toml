@@ -9,6 +9,7 @@ readme = "README.md"
 
 [dependencies]
 anyhow = "1.0.86"
+camino = "1.2.2"
 clap = { version = "4.5.4", features = ["derive", "env"] }
 const_format = "0.2.32"
 futures = "0.3.30"
