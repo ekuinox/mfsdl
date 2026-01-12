@@ -6,6 +6,7 @@ license = "WTFPL"
 authors = ["ekuinox <depkey@me.com>"]
 repository = "https://github.com/ekuinox/mfsdl"
 readme = "README.md"
+rust-version = "1.92"
 
 [dependencies]
 anyhow = "1.0.86"
