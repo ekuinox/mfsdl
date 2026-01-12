@@ -9,6 +9,7 @@ use clap::Parser;
 use const_format::formatcp;
 use futures::future::try_join_all;
 use tokio::sync::Semaphore;
+use tracing_subscriber::EnvFilter;
 
 use crate::{client::MyfansClient, downloader::download};
 
@@ -31,9 +32,11 @@ pub struct Cli {
 
 #[tokio::main]
 async fn main() {
-    let cli = Cli::parse();
+    tracing_subscriber::fmt::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
 
-    tracing_subscriber::fmt::init();
+    let cli = Cli::parse();
 
     tokio::fs::create_dir_all(&cli.output)
         .await
