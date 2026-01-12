@@ -43,7 +43,6 @@ impl MyfansClient {
             .json::<T>()
             .await
             .context("Failed to deserialize response.")
-            .map_err(From::from)
     }
 
     pub async fn get_post_ids_by_plan_id(
