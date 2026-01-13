@@ -25,10 +25,6 @@ pub struct Cli {
     #[clap(short, long, default_value_t = 4)]
     jobs: usize,
 
-    /// API呼び出しの並行数制限
-    #[clap(long, default_value_t = 10)]
-    api_concurrency: usize,
-
     /// from cookie `_mfans_token`
     #[clap(short, long, env = "MYFANS_TOKEN")]
     token: String,
@@ -55,7 +51,7 @@ async fn main() -> Result<()> {
         .context("Failed to fetch post IDs.")?;
     tracing::info!("Fetched {} post ids.", post_ids.len());
 
-    // 記事に含まれるすべての動画 URL を取得してくる（API並行数を制限）
+    // 記事に含まれるすべての動画 URL を取得してくる（並行数を制限）
     let video_urls: HashMap<_, _> = stream::iter(post_ids)
         .map(|post_id| async {
             client
@@ -63,7 +59,7 @@ async fn main() -> Result<()> {
                 .await
                 .map(|url| url.map(|url| (post_id, url)))
         })
-        .buffer_unordered(cli.api_concurrency)
+        .buffer_unordered(cli.jobs)
         .collect::<Vec<_>>()
         .await
         .into_iter()
