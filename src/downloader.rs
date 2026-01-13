@@ -13,7 +13,9 @@ pub async fn check_ffmpeg_available() -> Result<()> {
         .arg("-version")
         .output()
         .await
-        .context("Failed to execute ffmpeg. Make sure ffmpeg is installed and available in PATH.")?;
+        .context(
+            "Failed to execute ffmpeg. Make sure ffmpeg is installed and available in PATH.",
+        )?;
 
     if !output.status.success() {
         bail!("ffmpeg command failed. Make sure ffmpeg is properly installed.");
@@ -31,11 +33,20 @@ pub async fn download(post_id: &str, video_url: &str, output: impl AsRef<Utf8Pat
     if output.exists() {
         match tokio::fs::metadata(&output).await {
             Ok(metadata) if metadata.len() > 0 => {
-                tracing::info!(post_id, video_url, size = metadata.len(), "File already exists.");
+                tracing::info!(
+                    post_id,
+                    video_url,
+                    size = metadata.len(),
+                    "File already exists."
+                );
                 return Ok(());
             }
             Ok(_) => {
-                tracing::warn!(post_id, video_url, "File exists but is empty. Re-downloading.");
+                tracing::warn!(
+                    post_id,
+                    video_url,
+                    "File exists but is empty. Re-downloading."
+                );
                 // 空ファイルを削除
                 let _ = tokio::fs::remove_file(&output).await;
             }
@@ -67,10 +78,11 @@ pub async fn download(post_id: &str, video_url: &str, output: impl AsRef<Utf8Pat
     .await;
 
     // エラーが発生した場合、一時ファイルが残っていればクリーンアップ
-    if result.is_err() && temp.exists() {
-        if let Err(e) = tokio::fs::remove_file(&temp).await {
-            tracing::warn!(post_id, video_url, error = %e, "Failed to remove temporary file.");
-        }
+    if result.is_err()
+        && temp.exists()
+        && let Err(e) = tokio::fs::remove_file(&temp).await
+    {
+        tracing::warn!(post_id, video_url, error = %e, "Failed to remove temporary file.");
     }
 
     result

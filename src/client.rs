@@ -1,6 +1,6 @@
 use anyhow::{Context as _, Result};
 use reqwest::header::{self, HeaderMap, HeaderValue};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use structstruck::strike;
 
 const BASE_URL: &str = "https://api.myfans.jp/api/v2";
