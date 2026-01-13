@@ -91,6 +91,7 @@ async fn main() -> Result<()> {
             .unwrap()
             .progress_chars("=>-"),
     );
+    progress.tick(); // Force initial render
 
     // 動画のダウンロードを `cli.jobs` 数並行して行う
     let semaphore = Arc::new(Semaphore::new(cli.jobs));
