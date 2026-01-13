@@ -1,7 +1,7 @@
 mod client;
 mod downloader;
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
 use camino::Utf8PathBuf;
@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
     tracing::info!("Fetched {} post ids.", post_ids.len());
 
     // 記事に含まれるすべての動画 URL を取得してくる（並行数を制限）
-    let video_urls: HashMap<_, _> = stream::iter(post_ids)
+    let video_urls: Vec<_> = stream::iter(post_ids)
         .map(|post_id| async {
             client
                 .get_post_video_url(&post_id)
