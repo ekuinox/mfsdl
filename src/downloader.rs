@@ -26,9 +26,24 @@ pub async fn download(post_id: &str, video_url: &str, output: impl AsRef<Utf8Pat
     tracing::info!(post_id, video_url, "Download has started.");
 
     let output = output.as_ref().join(post_id).with_extension("mp4");
+
+    // ファイルが既に存在する場合、サイズを確認
     if output.exists() {
-        tracing::info!(post_id, video_url, "exists.");
-        return Ok(());
+        match tokio::fs::metadata(&output).await {
+            Ok(metadata) if metadata.len() > 0 => {
+                tracing::info!(post_id, video_url, size = metadata.len(), "File already exists.");
+                return Ok(());
+            }
+            Ok(_) => {
+                tracing::warn!(post_id, video_url, "File exists but is empty. Re-downloading.");
+                // 空ファイルを削除
+                let _ = tokio::fs::remove_file(&output).await;
+            }
+            Err(e) => {
+                tracing::warn!(post_id, video_url, error = %e, "Failed to check file metadata. Re-downloading.");
+                let _ = tokio::fs::remove_file(&output).await;
+            }
+        }
     }
 
     let temp = output.with_added_extension("tmp");
