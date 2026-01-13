@@ -8,6 +8,7 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use const_format::formatcp;
 use futures::{future::try_join_all, stream::{self, StreamExt}};
+use indicatif::{ProgressBar, ProgressStyle};
 use tokio::sync::Semaphore;
 use tracing_subscriber::EnvFilter;
 
@@ -74,6 +75,17 @@ async fn main() -> Result<()> {
     tokio::fs::create_dir_all(&cli.output)
         .await
         .context("Failed to create output directory.")?;
+
+    // プログレスバーを作成
+    let total = video_urls.len() as u64;
+    let progress = Arc::new(ProgressBar::new(total));
+    progress.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg}")
+            .unwrap()
+            .progress_chars("=>-"),
+    );
+
     // 動画のダウンロードを `cli.jobs` 数並行して行う
     let semaphore = Arc::new(Semaphore::new(cli.jobs));
     let output = Arc::new(cli.output);
@@ -81,15 +93,20 @@ async fn main() -> Result<()> {
     let futures = video_urls.into_iter().map(|(post_id, video_url)| {
         let semaphore = Arc::clone(&semaphore);
         let output = Arc::clone(&output);
+        let progress = Arc::clone(&progress);
         async move {
             let _sm = semaphore.acquire().await?;
-            download(&post_id, &video_url, output.as_ref()).await
+            let result = download(&post_id, &video_url, output.as_ref()).await;
+            progress.inc(1);
+            result
         }
     });
 
     try_join_all(futures)
         .await
         .context("Failed to download videos.")?;
+
+    progress.finish_with_message("Download completed");
 
     Ok(())
 }
