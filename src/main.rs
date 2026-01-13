@@ -1,17 +1,24 @@
 mod client;
 mod downloader;
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
 use const_format::formatcp;
-use futures::future::try_join_all;
+use futures::{
+    future::try_join_all,
+    stream::{self, StreamExt},
+};
+use indicatif::{ProgressBar, ProgressStyle};
 use tokio::sync::Semaphore;
 use tracing_subscriber::EnvFilter;
 
-use crate::{client::MyfansClient, downloader::download};
+use crate::{
+    client::MyfansClient,
+    downloader::{check_ffmpeg_available, download},
+};
 
 #[derive(Parser, Debug)]
 #[clap(version = formatcp!("v{} ({})", env!("CARGO_PKG_VERSION"), env!("VERGEN_GIT_SHA")))]
@@ -31,37 +38,61 @@ pub struct Cli {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     tracing_subscriber::fmt::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
     let cli = Cli::parse();
 
-    let client = MyfansClient::new(cli.token).expect("Failed to build client.");
+    // ffmpegの存在確認
+    check_ffmpeg_available()
+        .await
+        .context("ffmpeg is required but not available.")?;
+
+    let client = MyfansClient::new(cli.token).context("Failed to build client.")?;
 
     // すべての記事 ID を取得してくる
-    let post_ids = get_all_post_ids(&client, &cli.plan_id).await.unwrap();
+    let post_ids = get_all_post_ids(&client, &cli.plan_id)
+        .await
+        .context("Failed to fetch post IDs.")?;
     tracing::info!("Fetched {} post ids.", post_ids.len());
 
-    // 記事に含まれるすべての動画 URL を取得してくる
-    let video_urls = try_join_all(post_ids.into_iter().map(|post_id| async {
-        client
-            .get_post_video_url(&post_id)
-            .await
-            .map(|url| url.map(|url| (post_id, url)))
-    }))
-    .await
-    .expect("Failed to get video url.")
-    .into_iter()
-    .flatten()
-    .collect::<HashMap<_, _>>();
+    // 記事に含まれるすべての動画 URL を取得してくる（並行数を制限）
+    let video_urls: Vec<_> = stream::iter(post_ids)
+        .map(|post_id| async {
+            client
+                .get_post_video_url(&post_id)
+                .await
+                .map(|url| url.map(|url| (post_id, url)))
+        })
+        .buffer_unordered(cli.jobs)
+        .collect::<Vec<_>>()
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>>>()
+        .context("Failed to get video URLs.")?
+        .into_iter()
+        .flatten()
+        .collect();
     tracing::info!("Fetched {} video urls.", video_urls.len());
 
     // ダウンロード先のディレクトリを先に作っておく
     tokio::fs::create_dir_all(&cli.output)
         .await
-        .expect("Failed to create output directory.");
+        .context("Failed to create output directory.")?;
+
+    // プログレスバーを作成
+    let total = video_urls.len() as u64;
+    let progress = Arc::new(ProgressBar::new(total));
+    progress.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg}")
+            .unwrap()
+            .progress_chars("=>-"),
+    );
+    progress.tick(); // Force initial render
+
     // 動画のダウンロードを `cli.jobs` 数並行して行う
     let semaphore = Arc::new(Semaphore::new(cli.jobs));
     let output = Arc::new(cli.output);
@@ -69,13 +100,22 @@ async fn main() {
     let futures = video_urls.into_iter().map(|(post_id, video_url)| {
         let semaphore = Arc::clone(&semaphore);
         let output = Arc::clone(&output);
+        let progress = Arc::clone(&progress);
         async move {
             let _sm = semaphore.acquire().await?;
-            download(&post_id, &video_url, output.as_ref()).await
+            let result = download(&post_id, &video_url, output.as_ref()).await;
+            progress.inc(1);
+            result
         }
     });
 
-    try_join_all(futures).await.expect("Failed to convert");
+    try_join_all(futures)
+        .await
+        .context("Failed to download videos.")?;
+
+    progress.finish_with_message("Download completed");
+
+    Ok(())
 }
 
 /// プランに紐付くすべての記事 ID を取得する

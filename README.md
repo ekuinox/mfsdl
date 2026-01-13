@@ -25,7 +25,7 @@ Open myfans plan and get `plan_id` from url.
 And start download with below command.
 
 ```console
-mfsdl --plan-id <COPIED_PLAN_ID> --ouput <OUTPUT_DIRECTORY>
+mfsdl --plan-id <COPIED_PLAN_ID> --output <OUTPUT_DIRECTORY>
 ```
 
 ---

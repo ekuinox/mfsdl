@@ -1,4 +1,4 @@
-use anyhow::{Context as _, Result, ensure};
+use anyhow::{Context as _, Result, bail, ensure};
 use camino::Utf8Path;
 use futures::StreamExt as _;
 use tokio::{
@@ -7,31 +7,85 @@ use tokio::{
     process::Command,
 };
 
+/// ffmpegコマンドが利用可能かチェックする
+pub async fn check_ffmpeg_available() -> Result<()> {
+    let output = Command::new("ffmpeg")
+        .arg("-version")
+        .output()
+        .await
+        .context(
+            "Failed to execute ffmpeg. Make sure ffmpeg is installed and available in PATH.",
+        )?;
+
+    if !output.status.success() {
+        bail!("ffmpeg command failed. Make sure ffmpeg is properly installed.");
+    }
+
+    Ok(())
+}
+
 pub async fn download(post_id: &str, video_url: &str, output: impl AsRef<Utf8Path>) -> Result<()> {
     tracing::info!(post_id, video_url, "Download has started.");
 
     let output = output.as_ref().join(post_id).with_extension("mp4");
+
+    // ファイルが既に存在する場合、サイズを確認
     if output.exists() {
-        tracing::info!(post_id, video_url, "exists.");
-        return Ok(());
+        match tokio::fs::metadata(&output).await {
+            Ok(metadata) if metadata.len() > 0 => {
+                tracing::info!(
+                    post_id,
+                    video_url,
+                    size = metadata.len(),
+                    "File already exists."
+                );
+                return Ok(());
+            }
+            Ok(_) => {
+                tracing::warn!(
+                    post_id,
+                    video_url,
+                    "File exists but is empty. Re-downloading."
+                );
+                // 空ファイルを削除
+                let _ = tokio::fs::remove_file(&output).await;
+            }
+            Err(e) => {
+                tracing::warn!(post_id, video_url, error = %e, "Failed to check file metadata. Re-downloading.");
+                let _ = tokio::fs::remove_file(&output).await;
+            }
+        }
     }
 
     let temp = output.with_added_extension("tmp");
 
-    if video_url.ends_with(".m3u8") {
-        download_m3u8_to_mp4(video_url, &temp).await?;
-    } else if video_url.ends_with(".mp4") {
-        download_mp4(video_url, &temp).await?;
-    } else {
-        tracing::info!(post_id, video_url, "Skipped.");
-        return Ok(());
+    // ダウンロード処理を実行し、失敗時には一時ファイルをクリーンアップ
+    let result = async {
+        if video_url.ends_with(".m3u8") {
+            download_m3u8_to_mp4(video_url, &temp).await?;
+        } else if video_url.ends_with(".mp4") {
+            download_mp4(video_url, &temp).await?;
+        } else {
+            tracing::info!(post_id, video_url, "Skipped.");
+            return Ok(());
+        }
+
+        tokio::fs::rename(&temp, &output).await?;
+
+        tracing::info!(post_id, video_url, "Download completed.");
+        Ok(())
+    }
+    .await;
+
+    // エラーが発生した場合、一時ファイルが残っていればクリーンアップ
+    if result.is_err()
+        && temp.exists()
+        && let Err(e) = tokio::fs::remove_file(&temp).await
+    {
+        tracing::warn!(post_id, video_url, error = %e, "Failed to remove temporary file.");
     }
 
-    tokio::fs::rename(&temp, &output).await?;
-
-    tracing::info!(post_id, video_url, "Download completed.");
-
-    Ok(())
+    result
 }
 
 /// `ffmpeg` を呼び出して `.m3u8` を `.mp4` としてダウンロードする
