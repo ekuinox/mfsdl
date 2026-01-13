@@ -7,12 +7,18 @@ use anyhow::{Context as _, Result};
 use camino::Utf8PathBuf;
 use clap::Parser;
 use const_format::formatcp;
-use futures::{future::try_join_all, stream::{self, StreamExt}};
+use futures::{
+    future::try_join_all,
+    stream::{self, StreamExt},
+};
 use indicatif::{ProgressBar, ProgressStyle};
 use tokio::sync::Semaphore;
 use tracing_subscriber::EnvFilter;
 
-use crate::{client::MyfansClient, downloader::{check_ffmpeg_available, download}};
+use crate::{
+    client::MyfansClient,
+    downloader::{check_ffmpeg_available, download},
+};
 
 #[derive(Parser, Debug)]
 #[clap(version = formatcp!("v{} ({})", env!("CARGO_PKG_VERSION"), env!("VERGEN_GIT_SHA")))]
