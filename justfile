@@ -1,6 +1,9 @@
 # Use PowerShell on Windows
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
+run *args:
+    cargo run --release -- {{ args }}
+
 # Run all checks (cargo check, clippy, fmt, test, deny)
 check: _check _clippy _fmt _test deny
 
