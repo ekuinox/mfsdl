@@ -23,4 +23,4 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [build-dependencies]
-vergen = { version = "8.3.1", features = ["git", "gitcl"] }
+vergen-gitcl = "1.0.8"
